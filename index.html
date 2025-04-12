@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Timer Tamer</title>
+    <title>Time Tamer</title>
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#333333">
     <link rel="apple-touch-icon" href="icon.png">
@@ -336,7 +336,9 @@
             max-height: 300px;
             overflow-y: auto;
         }
-
+        .history-item.hyperfocus {
+            border-left-color: #F7E7A9;
+        }
         .history-item {
             padding: 15px;
             margin-bottom: 10px;
@@ -414,7 +416,7 @@
 </head>
 <body>
     <header>
-        <div class="header-title">Timer Tamer</div>
+        <div class="header-title">Time Tamer</div>
         <div class="header-buttons">
             <button class="btn-history" onclick="showHistory()">Show History</button>
         </div>
@@ -442,9 +444,9 @@
                         <label for="workRatioSlider">Work/Rest Ratio:</label>
                         <input type="range" id="workRatioSlider" min="10" max="90" value="50" class="slider">
                         <div class="slider-labels">
-                            <span> Work</span>
+                            <span>10% Work</span>
                             <span id="workRatioLabel">50% Work</span>
-                            <span>Work</span>
+                            <span>90% Work</span>
                         </div>
                     </div>
                 </div>
@@ -559,20 +561,6 @@
             "Well done on your deep work! Now let's honor your need for rest."
         ];
         
-        // Break reminder messages
-        const breakReminderMessages = [
-            "Tidy up your space for a fresh vibe",
-            "Stretch like a cat waking up from a nap",
-            "Flow through some tai chi moves",
-            "Dance like nobody's watching",
-            "Sip on a cozy cup of tea",
-            "Snack on something yummy and healthy",
-            "Take a moment to look out the window",
-            "Do a short breathing exercise to relax",
-            "Listen to your music and feel the rhythm",
-            "Take a little stroll"
-        ];
-        
         // Show notification
         function showNotification(title, message, type, showButtons = false, buttonMode = "default") {
             document.getElementById('notificationTitle').textContent = title;
@@ -666,7 +654,7 @@
         }
         
         // Add a new entry to history
-        function addHistoryEntry(taskName, totalTime, workTime, restTime, isCompleted) {
+        function addHistoryEntry(taskName, totalTime, workTime, restTime, isCompleted, isHyperfocus = false, hyperfocusTime = 0) {
             const now = new Date();
             const entry = {
                 id: Date.now(),
@@ -675,17 +663,16 @@
                 workTime: workTime,
                 restTime: restTime,
                 workPercent: workPercent,
-                hyperfocusTime: isHyperfocusMode ? hyperfocusSeconds : 0, // Always include hyperfocus time
                 date: now.toISOString(),
                 formattedDate: now.toLocaleString(),
                 isCompleted: isCompleted,
-                wasHyperfocus: isHyperfocusMode // Track if this was a hyperfocus session
+                isHyperfocus: isHyperfocus,
+                hyperfocusTime: hyperfocusTime
             };
             
-            console.log("Adding history entry with hyperfocus time:", entry.hyperfocusTime); // Debug log
             timerHistory.unshift(entry);
             saveHistory();
-        }
+        }
         
         // Clear all history
         function clearHistory() {
@@ -708,16 +695,27 @@
             
             timerHistory.forEach(entry => {
                 const historyItem = document.createElement('div');
-                historyItem.className = `history-item ${entry.isCompleted ? 'completed' : 'stopped'}`;
+                historyItem.className = `history-item ${entry.isCompleted ? 'completed' : 'stopped'} ${
+                    entry.isHyperfocus ? 'hyperfocus' : ''
+                }`;
                 
-                // Always show hyperfocus duration
-                const hyperfocusDisplay = formatTime(entry.hyperfocusTime || 0);
+                let timeInfo = '';
+                if (entry.isHyperfocus) {
+                    timeInfo = `
+                        <p>Hyperfocus Duration: ${formatTime(entry.hyperfocusTime)}</p>
+                        <p>Total Time: ${formatTime(entry.totalTime)}</p>
+                    `;
+                } else {
+                    timeInfo = `
+                        <p>Work: ${formatTime(entry.workTime)} (${entry.workPercent}%)</p>
+                        <p>Rest: ${formatTime(entry.restTime)} (${100-entry.workPercent}%)</p>
+                        <p>Total Duration: ${formatTime(entry.totalTime)}</p>
+                    `;
+                }
                 
                 historyItem.innerHTML = `
-                    <h3>${entry.taskName}</h3>
-                    <p>Total Duration: ${formatTime(entry.totalTime)}</p>
-                    <p>Work: ${formatTime(entry.workTime)} (${entry.workPercent}%) / Rest: ${formatTime(entry.restTime)} (${100-entry.workPercent}%)</p>
-                    <p style="color: #ff6f00;">Hyperfocus Duration: ${hyperfocusDisplay}</p>
+                    <h3>${entry.taskName}${entry.isHyperfocus ? ' (Hyperfocus)' : ''}</h3>
+                    ${timeInfo}
                     <p>Status: ${entry.isCompleted ? 'Completed' : 'Stopped early'}</p>
                     <div class="history-details">
                         <span>${entry.formattedDate}</span>
@@ -725,9 +723,8 @@
                 `;
                 
                 historyList.appendChild(historyItem);
-            });
-        }
-        
+            });
+        }
         // Update work ratio label when slider changes
         workRatioSlider.addEventListener('input', function() {
             workRatioLabel.textContent = `${this.value}% Work`;
@@ -790,7 +787,6 @@
             isWorkMode = !isWorkMode;
             const modeIndicator = document.getElementById('modeIndicator');
             const currentPhase = document.getElementById('currentPhase');
-            const timeRatio = document.getElementById('timeRatio');
             
             if (isWorkMode) {
                 modeIndicator.textContent = "WORK";
@@ -799,11 +795,8 @@
                 timerCircle.className = "timer-circle work";
                 secondsLeft = workSeconds;
                 
-                if (timeRatio) {
-                    timeRatio.innerHTML = `
-                        <div>Work: ${formatTime(workSeconds)} / Rest: ${formatTime(restSeconds)}</div>
-                    `;
-                }
+                // Show notification for rest completion
+                showNotification("Back to Work", getRandomMessage(restCompleteMessages), "rest");
             } else {
                 modeIndicator.textContent = "REST";
                 modeIndicator.className = "mode-indicator rest-mode";
@@ -811,16 +804,25 @@
                 timerCircle.className = "timer-circle rest";
                 secondsLeft = restSeconds;
                 
-                if (timeRatio) {
-                    timeRatio.innerHTML = `
-                        <div>Rest Time: ${formatTime(restSeconds)}</div>
-                        <div style="margin-top: 10px; font-style: italic; color: #666;">${getRandomMessage(breakReminderMessages)}</div>
-                    `;
-                }
+                // Pause the timer while showing the hyperfocus option
+                clearInterval(timerInterval);
+                
+                // Show self-care reminder with hyperfocus option
+                showNotification(
+                    "Break Time", 
+                    getRandomMessage(selfCareReminders) + " Are you in hyperfocus and want to continue working?", 
+                    "work",
+                    true // Show buttons
+                );
+                
+                // Don't restart the timer here - it will be restarted when the user chooses
+                return; // Exit the function early
             }
             
             document.getElementById('timeDisplay').textContent = formatTime(secondsLeft);
-            updateCircleProgress(0);
+            updateCircleProgress(0); // Reset circle progress for new phase
+            
+            // Play transition sound
             playTransitionSound();
         }
         
@@ -840,26 +842,34 @@
         // Update timer display and check for completion
         function updateTimer() {
             if (secondsLeft <= 0) {
-                // Both work and rest are complete
-                clearInterval(timerInterval);
-                document.getElementById('timeDisplay').textContent = "00:00";
-                
-                // Add to history - completed
-                const initialWorkTime = Math.ceil((totalSeconds * workPercent) / 100);
-                const initialRestTime = totalSeconds - initialWorkTime;
-                addHistoryEntry(
-                    currentTaskName, 
-                    totalSeconds, 
-                    initialWorkTime, 
-                    initialRestTime, 
-                    true
-                );
-                
-                playCompletionSound();
-                showNotification("Time's Up!", "Great job! You've completed your timer session!", "final");
-                
-                isRunning = false;
-                showSection('setupSection');
+                // Check if we need to switch modes
+                if ((isWorkMode && restSeconds > 0) || (!isWorkMode && workSeconds > 0)) {
+                    switchMode();
+                } else {
+                    // Both work and rest are complete
+                    clearInterval(timerInterval);
+                    document.getElementById('timeDisplay').textContent = "00:00";
+                    
+                    // Add to history - completed
+                    const initialWorkTime = Math.ceil((totalSeconds * workPercent) / 100);
+                    const initialRestTime = totalSeconds - initialWorkTime;
+                    addHistoryEntry(
+                        currentTaskName, 
+                        totalSeconds, 
+                        initialWorkTime, 
+                        initialRestTime, 
+                        true // Completed
+                    );
+                    
+                    // Play final completion sound
+                    playCompletionSound();
+                    
+                    // Show final completion notification
+                    showNotification("Time's Up!", getRandomMessage(finalCompleteMessages), "final");
+                    
+                    isRunning = false;
+                    showSection('setupSection');
+                }
                 return;
             }
             
@@ -871,17 +881,6 @@
                 workSeconds = secondsLeft;
             } else {
                 restSeconds = secondsLeft;
-                
-                // Update rest message every 30 seconds during rest phase
-                if (secondsLeft % 30 === 0) {
-                    const timeRatio = document.getElementById('timeRatio');
-                    if (timeRatio) {
-                        timeRatio.innerHTML = `
-                            <div>Rest Time: ${formatTime(secondsLeft)}</div>
-                            <div style="margin-top: 10px; font-style: italic; color: #666;">${getRandomMessage(breakReminderMessages)}</div>
-                        `;
-                    }
-                }
             }
             
             // Update circle progress for current phase
@@ -1067,34 +1066,22 @@
             playHyperfocusSound();
         }
         
-        // Update hyperfocus timer
+        // Update hyperfocus timer with reminders
         function updateHyperfocusTimer() {
             hyperfocusSeconds++;
             document.getElementById('timeDisplay').textContent = formatTime(hyperfocusSeconds);
             
-            // Update circle progress
+            // Update circle progress (for visual feedback)
             const progress = (hyperfocusSeconds % 360) / 360;
             updateCircleProgress(progress);
             
-            // Update time ratio display to show current hyperfocus duration and a reminder
-            const timeRatio = document.getElementById('timeRatio');
-            if (timeRatio) {
-                timeRatio.innerHTML = `
-                    <div>Current Hyperfocus Duration: ${formatTime(hyperfocusSeconds)}</div>
-                    <div style="margin-top: 10px; font-style: italic; color: #666;">${getRandomMessage(breakReminderMessages)}</div>
-                `;
-            }
-            
-            // Change reminder message every 2 minutes
-            if (hyperfocusSeconds % 120 === 0) {
-                const timeRatio = document.getElementById('timeRatio');
-                if (timeRatio) {
-                    const currentDuration = timeRatio.querySelector('div:first-child').textContent;
-                    timeRatio.innerHTML = `
-                        <div>${currentDuration}</div>
-                        <div style="margin-top: 10px; font-style: italic; color: #666;">${getRandomMessage(breakReminderMessages)}</div>
-                    `;
-                }
+            // Remind about taking breaks at regular intervals (every 15 minutes)
+            if (hyperfocusSeconds % 900 === 0 && hyperfocusSeconds > 0) {
+                showNotification(
+                    "Hyperfocus Check", 
+                    "You've been in hyperfocus for " + Math.floor(hyperfocusSeconds/60) + " minutes. Remember to take breaks for your wellbeing!", 
+                    "work"
+                );
             }
         }
         
@@ -1137,34 +1124,58 @@
         function stopTimer() {
             clearInterval(timerInterval);
             
-            const initialWorkTime = Math.ceil((totalSeconds * workPercent) / 100);
-            const initialRestTime = totalSeconds - initialWorkTime;
-            
             if (isHyperfocusMode) {
                 clearInterval(hyperfocusInterval);
-                const hyperfocusMinutes = Math.floor(hyperfocusSeconds / 60);
-                
-                console.log("Stopping hyperfocus timer with duration:", hyperfocusSeconds); // Debug log
-                
-                // Add to history with hyperfocus time
-                addHistoryEntry(
-                    currentTaskName, 
-                    totalSeconds, 
-                    initialWorkTime, 
-                    initialRestTime, 
-                    false // Not completed
-                );
-                
                 isHyperfocusMode = false;
                 
-                // Show notification
+                // Add hyperfocus entry to history
+                addHistoryEntry(
+                    currentTaskName,
+                    hyperfocusSeconds,
+                    0,
+                    0,
+                    true,
+                    true,
+                    hyperfocusSeconds
+                );
+                
+                // Show notification to suggest continuing with rest
                 showNotification(
                     "Hyperfocus Complete", 
-                    getRandomMessage(hyperfocusExitReminders) + " You were in hyperfocus for " + hyperfocusMinutes + " minutes.", 
+            getRandomMessage(hyperfocusExitReminders) + " You were in hyperfocus for " + 
+            Math.floor(hyperfocusSeconds/60) + " minutes.", 
                     "rest",
                     true,
                     "continue-rest"
                 );
+                
+                // Update the "Yes" button to continue with rest
+                const continueRestBtn = document.getElementById('continueHyperfocusBtn');
+                continueRestBtn.textContent = "Continue with Rest";
+                continueRestBtn.onclick = function() {
+                    hideNotification();
+                    
+                    // Resume the rest phase
+                    isWorkMode = false;
+                    const modeIndicator = document.getElementById('modeIndicator');
+                    modeIndicator.textContent = "REST";
+                    modeIndicator.className = "mode-indicator rest-mode";
+                    document.getElementById('currentPhase').textContent = "Rest Phase";
+                    timerCircle.className = "timer-circle rest";
+                    
+                    // Make sure we still have rest time
+                    if (restSeconds <= 0) {
+                        restSeconds = Math.max(Math.floor(hyperfocusSeconds / 4), 60);
+                    }
+                    
+                    secondsLeft = restSeconds;
+                    document.getElementById('timeDisplay').textContent = formatTime(secondsLeft);
+                    updateCircleProgress(0);
+                    
+                    // Restart timer
+                    timerInterval = setInterval(updateTimer, 1000);
+                    isRunning = true;
+                };
                 
                 return;
             }
@@ -1172,17 +1183,19 @@
             isRunning = false;
             
             // Add to history - not completed
+            const initialWorkTime = Math.ceil((totalSeconds * workPercent) / 100);
+            const initialRestTime = totalSeconds - initialWorkTime;
+            
             addHistoryEntry(
                 currentTaskName, 
                 totalSeconds, 
                 initialWorkTime, 
                 initialRestTime, 
-                false // Not completed
+                false
             );
             
-            showNotification("Timer Stopped", "You've stopped the timer early. That's okay!", "rest");
             showSection('setupSection');
-        }
+        }
         
         // Initialize on page load
         window.onload = function() {
